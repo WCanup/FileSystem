@@ -150,8 +150,11 @@ static void write_inode(uint16_t idx)
         whichBlock = 3;
         index = idx - 386;
     }else{
+        fserror = FS_OUT_OF_SPACE;
         //error error out of range
     }
+    inode_blocks[whichBlock]->IBlock[index].
+    //memcpy(buf, )
 }
 
 // open existing file with pathname 'name' and access mode 'mode'.
@@ -172,7 +175,6 @@ File create_file(char *name){
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
     }
-    else if()
     //file->fname = name;
     
     //find unused Inode
