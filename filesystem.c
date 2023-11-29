@@ -134,7 +134,19 @@ static void free_block(uint16_t idx)
 
 static void write_inode(uint16_t idx)
 {
-    
+    int index = idx;
+    int whichBlock;
+    if(index < 129 && index > -1){
+        whichBlock = 0;
+    }else if(index > 128 && index < 257){
+        whichBlock = 1;
+    }else if(index > 256 && index < 385){
+        whichBlock = 2;
+    }else if(index > 386 && index < 513){
+        whichBlock = 3;
+    }else{
+        //error error out of range
+    }
 }
 
 // open existing file with pathname 'name' and access mode 'mode'.
