@@ -3,6 +3,9 @@
 // (@nolaforensix), 11/2017.  Minor updates 11/2019.  Updated 6/2022.
 // Modified by AAG, 11/2022
 
+#include <stdint.h>
+#include "softwaredisk.h"
+
 #if ! defined(__FILESYSTEM_4103_H__)
 #define __FILESYSTEM_4103_H__
 
@@ -40,6 +43,61 @@ typedef enum {
 	READ_ONLY, READ_WRITE
 } FileMode;
 
+uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
+uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
+
+// typedef struct DataBlock{
+//     char data[1];
+// }DataBlock;
+
+// typedef struct Data_Blocks{
+//     char block[STARTING_SPACE];
+// }Data_Blocks;
+
+// Data_Blocks filesystem;
+uint8_t filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+
+typedef struct Inode{
+    uint16_t direct_addresses[NUM_DIRECT_INODE_BLOCKS]; //26 bytes
+    uint16_t indirect;             //2 bytes
+    uint32_t size;                 //4 bytes
+                                         //26+2+4 = 32 bytes
+}Inode;
+
+typedef struct Inode_Block{
+
+    Inode IBlock[INODES_PER_BLOCK]; //32 * 128 = 4096
+
+}Inode_Block;
+
+Inode_Block inode_blocks[NUM_INODE_BLOCKS];
+
+typedef struct Dir_Entry{
+
+    uint8_t name[MAX_FILENAME_SIZE];  //507 bytes
+    uint16_t id;        //2 bytes
+    uint8_t mode;       //1 byte
+    uint16_t NT;      //2 bytes
+                        //507+2+1+2 = 512
+}Dir_Entry;
+
+typedef struct Dir_Block{
+
+  Dir_Entry dblock[DIR_ENTRIES_PER_BLOCK]; //512 * 8 = 4096
+
+}Dir_Block;
+
+Dir_Block directory_blocks[NUM_DIR_BLOCKS];
+
+typedef struct FileInternals{
+    char fname[MAX_FILENAME_SIZE];
+    uint32_t size;
+    FileMode mode;
+    unsigned int cursor_position;
+    Inode inode;
+}FileInternals;
+
 // error codes set in global 'fserror' by filesystem functions
 typedef enum  {
   FS_NONE, 
@@ -54,6 +112,8 @@ typedef enum  {
   FS_ILLEGAL_FILENAME,     // filename begins with a null character
   FS_IO_ERROR              // something really bad happened
 } FSError;
+
+FSError fserror;
 
 // function prototypes for filesystem API
 
