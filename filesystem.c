@@ -49,7 +49,7 @@ FSError fserror;
 typedef struct Inode{
     uint16_t direct_addresses[NUM_DIRECT_INODE_BLOCKS]; //26 bytes
     uint16_t indirect;             //2 bytes
-    uint32_t size;                   //4 bytes
+    uint32_t size;                 //4 bytes
                                          //26+2+4 = 32 bytes
 }Inode;
 
@@ -79,18 +79,18 @@ typedef struct Dir_Block{
 Dir_Block directory_blocks[NUM_DIR_BLOCKS];
 
 typedef struct FileInternals{
-    char *fname;
+    char *fname[MAX_FILENAME_SIZE];
     uint32_t size;
     FileMode mode;
     unsigned int cursor_position;
-    Inode location;
+    Inode inode;
 }FileInternals;
 
 static uint16_t find_free_inode(void)
 {
     for(int i = 0; i < MAX_FILES; i++)
     {
-        if(inode_bitmap[0] == 0)
+        if(inode_bitmap[i] == 0)
         {
             return i;
         }
@@ -153,8 +153,8 @@ static void write_inode(uint16_t idx)
         fserror = FS_OUT_OF_SPACE;
         //error error out of range
     }
-    inode_blocks[whichBlock]->IBlock[index].
-    //memcpy(buf, )
+    Inode inode = inode_blocks[whichBlock].IBlock[index];
+
 }
 
 // open existing file with pathname 'name' and access mode 'mode'.
@@ -174,7 +174,11 @@ File create_file(char *name){
     {
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
+        return file;
     }
+    file->cursor_position = 0;
+    file->inode = 
+
     //file->fname = name;
     
     //find unused Inode
@@ -202,7 +206,9 @@ unsigned long read_file(File file, void *buf, unsigned long numbytes){
 // error, the return value may be less than 'numbytes'.  Always sets
 // 'fserror' global.
 unsigned long write_file(File file, void *buf, unsigned long numbytes){
-
+    //compare the numbytes + size of our file
+    //write opertation exceeds a data blocks capacity
+    //
 }
 
 // sets current position in file to 'bytepos', always relative to the
