@@ -32,11 +32,10 @@
 
 #define MAX_FILE_SIZE (NUM_DIRECT_INODE_BLOCKS + NUM_SINGLE_INDIRECT_BLOCKS) * SOFTWARE_DISK_BLOCK_SIZE
 
-// private
-struct FileInternals;
+
 
 // file type used by user code
-typedef struct FileInternals* File;
+
 
 // access mode for open_file() 
 typedef enum {
@@ -44,8 +43,9 @@ typedef enum {
 } FileMode;
 
 uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
-uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
-uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
+uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
 // typedef struct DataBlock{
 //     char data[1];
@@ -58,11 +58,20 @@ uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
 // Data_Blocks filesystem;
 uint8_t filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
+
+typedef struct Indirect_Inode{
+  uint16_t data_block_idx;
+}Indirect_Inode;
+
+typedef struct Indirect_Inode_Block{
+  uint8_t i_iblock[SOFTWARE_DISK_BLOCK_SIZE];
+}Indirect_Inode_Block;
+
 typedef struct Inode{
     uint16_t direct_addresses[NUM_DIRECT_INODE_BLOCKS]; //26 bytes
-    uint16_t indirect;             //2 bytes
+    Indirect_Inode indirect;       //2 bytes
     uint32_t size;                 //4 bytes
-                                         //26+2+4 = 32 bytes
+                                   //26+2+4 = 32 bytes
 }Inode;
 
 typedef struct Inode_Block{
@@ -75,10 +84,10 @@ Inode_Block inode_blocks[NUM_INODE_BLOCKS];
 
 typedef struct Dir_Entry{
 
-    uint8_t name[MAX_FILENAME_SIZE];  //507 bytes
+    char *name[MAX_FILENAME_SIZE];  //507 bytes
     uint16_t id;        //2 bytes
     uint8_t mode;       //1 byte
-    uint16_t NT;      //2 bytes
+    //uint16_t NT;      //2 bytes
                         //507+2+1+2 = 512
 }Dir_Entry;
 
@@ -94,10 +103,11 @@ typedef struct FileInternals{
     char fname[MAX_FILENAME_SIZE];
     uint32_t size;
     FileMode mode;
-    unsigned int cursor_position;
+    uint32_t cursor_position;
     Inode inode;
 }FileInternals;
 
+typedef struct FileInternals* File;
 // error codes set in global 'fserror' by filesystem functions
 typedef enum  {
   FS_NONE, 

@@ -1,11 +1,12 @@
 #include "filesystem.h"
 #include "softwaredisk.h"
-#include "softwaredisk.c"
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
-static uint16_t find_free_inode(void)
+
+static int find_free_inode(void)
 {
     for(int i = 0; i < MAX_FILES; i++)
     {
@@ -17,11 +18,11 @@ static uint16_t find_free_inode(void)
     return INT16_MAX;
 }
 
-static uint32_t find_free_block(void)
+static int find_free_block(void)
 {
-    for(uint32_t i = FIRST_DATA_BLOCK; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
+    for(int i = FIRST_DATA_BLOCK; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
     {
-        if (data_bitmap[i] = 0)
+        if (data_bitmap[i] == 0)
         {
             return i;
         }
@@ -29,33 +30,53 @@ static uint32_t find_free_block(void)
     return INT32_MAX;
 }
 
-static int mark_inode(uint16_t idx)
+static int find_free_dir_entry(void)
+{
+    for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
+    {
+        if (dir_entry_bitmap[i] == 0)
+        {
+            return i;
+        }
+    }
+    return INT32_MAX;
+}
+
+static void mark_inode(int idx)
 {
     inode_bitmap[idx] = 1;
-    return 1;
 }
 
-static int mark_block(uint16_t idx)  
+static void mark_block(int idx)  
 {
     data_bitmap[idx] = 1;
-    return 1; 
 }
 
-static void free_inode(uint16_t idx)
+static void mark_dir_entry(int idx)
+{
+    dir_entry_bitmap[idx] = 1;
+}
+
+static void free_inode(int idx)
 {
     inode_bitmap[idx] = 0;
 }
 
-static void free_block(uint16_t idx)
+static void free_block(int idx)
 {
     data_bitmap[idx] = 0;
+}
+
+static void free_dir_entry(int idx)
+{
+    dir_entry_bitmap[idx] = 0;
 }
 
 static Inode fetch_Inode(uint16_t idx){
     int index = idx;
     int whichBlock;
     //0-127 is 128 indexes
-    if( index >= 0 && index <= 127 ){
+    if(index >= 0 && index <= 127 ){
         whichBlock = 0;
     //128-255
     }else if(index >= 128 && index <= 255){
@@ -75,10 +96,41 @@ static Inode fetch_Inode(uint16_t idx){
     return inode;
 }
 
-static void write_inode(uint16_t idx)
+static void fetch_data_block(int idx){
+
+}
+
+static Dir_Entry fetch_dir_entry(int idx){
+    int first_dir_per_block = 0;
+    Dir_Entry result;
+    for(int i = 0; i < NUM_DIR_BLOCKS; i++)
+    {
+        for(int j = 0; j < DIR_ENTRIES_PER_BLOCK; j++){
+            if(j + first_dir_per_block == idx)
+            {
+                result = directory_blocks[i].dblock[j];
+
+                return result;
+            }
+        }
+        first_dir_per_block = first_dir_per_block + DIR_ENTRIES_PER_BLOCK;
+    }
+    return result;
+}
+
+static void write_inode(uint16_t idx, uint16_t direct_addr[], uint16_t indirect_inode, uint32_t i_size)
 {
-    
     Inode inode = fetch_Inode(idx);
+    memcpy(inode.direct_addresses, direct_addr, sizeof(inode.direct_addresses));
+
+
+}
+
+static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mode)
+{
+    strcpy(dir_entry->name, name);
+    dir_entry->id = id;
+    dir_entry->mode = mode;
 
 }
 
@@ -93,26 +145,58 @@ File open_file(char *name, FileMode mode){
 // mode READ_WRITE.  Current file position is set to byte 0.  Returns
 // NULL on error. Always sets 'fserror' global.
 File create_file(char *name){
+
     fserror = FS_NONE;
     File file;
-    int index = find_free_inode;
-    if(index == INT32_MAX)
+    file = malloc(sizeof(FileInternals));
+    int inode_index = find_free_inode();
+    int data_index = find_free_block();
+    int dir_entry_index = find_free_dir_entry();
+
+    
+    if(inode_index == INT32_MAX)
     {
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
-        return file;
+        return NULL;
     }
-    mark_inode(index);
-    file->cursor_position = 0;
-    file->inode = fetch_Inode(index);
-    //file->fname = *name;
-    strcpy(file->fname, name);
+    if(data_index == INT32_MAX)
+    {
+        fserror = FS_OUT_OF_SPACE;
+        fs_print_error();
+        return NULL;
+    }
 
-    //file->fname = name;
-    
-    //find unused Inode
-    //find unused Data Block
-    //reserve Inode and Data Block
+
+    if(file_exists(name))
+    {
+        fserror = FS_FILE_ALREADY_EXISTS;
+        fs_print_error();
+        return NULL;
+    }
+
+    mark_dir_entry(dir_entry_index);
+    mark_inode(inode_index);
+    fetch_Inode(inode_index);
+    mark_block(data_index);
+
+
+    file->cursor_position = 0;
+
+    file->inode = fetch_Inode(inode_index);
+    strcpy(file->fname, name);
+    file->mode = READ_WRITE;
+    file->size = 0;
+
+    int dir_block_index = dir_entry_index / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    int dir_entry_block_index = dir_entry_index % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+
+    write_dir_entry(&directory_blocks[dir_block_index].dblock[dir_entry_block_index], name, dir_entry_index, 'b');
+
+    printf("name contents: %s\n", file->fname);
+    free(file);
+
+    return file;
 
 }
 
@@ -164,11 +248,70 @@ int delete_file(char *name){
 // Always sets 'fserror' global.
 int file_exists(char *name){
 
+    for(int i = 0; i < NUM_DIR_BLOCKS * DIR_ENTRIES_PER_BLOCK; i++)
+    {
+        //printf("value of i: %d\n", i);
+        if(dir_entry_bitmap[i] == 1)
+        {
+            int dir_block_index = i / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+            int dir_entry_index = i % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+            if(!strcmp(directory_blocks[dir_block_index].dblock[dir_entry_index].name, name))
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+
+    // int first_dir_per_block = 0;
+    // for(int i = 0; i < NUM_DIR_BLOCKS; i++){
+    //     for(int j = 0; j < DIR_ENTRIES_PER_BLOCK; i++){
+    //         if(strcmp(!directory_blocks[i].dblock[j].name, name)){
+    //             printf("new file name:%s\nold file name: %s\n", name, directory_blocks[i].dblock[j].name);
+    //             fserror = FS_FILE_ALREADY_EXISTS;
+    //             return 1;
+    //         }
+    //     }
+    //     first_dir_per_block = first_dir_per_block + DIR_ENTRIES_PER_BLOCK;
+    // }
+    // return 0;
+
 }
 
 // describe current filesystem error code by printing a descriptive
 // message to standard error.
 void fs_print_error(void){
+    switch (fserror) {
+  case FS_EXCEEDS_MAX_FILE_SIZE:
+    printf("FS: File is too big.\n");
+    break;
+  case FS_FILE_ALREADY_EXISTS:
+    printf("FS: File name already exists.\n");
+    break;
+  case FS_FILE_NOT_FOUND:
+    printf("FS: File not found.\n");
+    break;
+  case FS_FILE_NOT_OPEN:
+    printf("FS: File is not open.\n");
+    break;
+  case FS_FILE_OPEN:
+    printf("FS: File is already open.\n");
+    break;
+  case FS_FILE_READ_ONLY:
+    printf("FS: File is in read only mode.\n");
+    break;
+  case FS_ILLEGAL_FILENAME:
+    printf("FS: Illegal file name.\n");
+    break;
+  case FS_OUT_OF_SPACE:
+    printf("FS: Out of space.\n");
+    break;
+  case FS_NONE:
+    printf("FS: No error.\n");
+    break;
+  default:
+    printf("FS: Unknown error code %d.\n", sderror);
+  }
 
 }
 
@@ -178,7 +321,33 @@ void fs_print_error(void){
 // to ensure that everything will work correctly.
 int check_structure_alignment(void){
 
+    printf("Expecting sizeof(Inode) = 32, actual = %llu\n", sizeof(Inode));
+    printf("Expecting sizeof(Indirect_Inode_Block) = 4096, actual = %llu\n", sizeof(Indirect_Inode_Block));
+    printf("Expecting sizeof(Inode_Block) = %d, actual = %llu\n", SOFTWARE_DISK_BLOCK_SIZE,sizeof(Inode_Block));
+    printf("Expecting sizeof(Dir_Entry) = 512, actual = %llu\n", sizeof(Dir_Entry));
+    printf("Expecting sizeof(Dir_Block) = %d, actual = %llu\n", SOFTWARE_DISK_BLOCK_SIZE, sizeof(Dir_Block));
+    printf("Expecting sizeof(data_bitmap) = %d, actual = %llu\n", SOFTWARE_DISK_BLOCK_SIZE,sizeof(data_bitmap));
+    
+    if(sizeof(Inode) != 32|| 
+    sizeof(Inode_Block) != SOFTWARE_DISK_BLOCK_SIZE || 
+    sizeof(Dir_Entry) != 512 || 
+    sizeof(Dir_Block) != SOFTWARE_DISK_BLOCK_SIZE || 
+    sizeof(data_bitmap) != SOFTWARE_DISK_BLOCK_SIZE){
+    return 0;
+    }
+    return 1;
 }
 
 // filesystem error code set (set by each filesystem function)
 extern FSError fserror;
+
+int main(int argc, char *argv[]){
+    File file1 = create_file("hello");
+    File file2 = create_file("hello");
+    File file3 = create_file("howdy partner");
+    File file4 = create_file("howdy partner");
+
+
+
+    return 0;
+}

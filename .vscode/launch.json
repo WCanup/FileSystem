@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Filesystems",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "C:/Users/sammy/FileSystem/filesystem.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "preLaunchTask": "build filesystems", // You need to define this task in tasks.json
+            "logging": {
+                "engineLogging": false
+            }
+        }
+    ]
+}

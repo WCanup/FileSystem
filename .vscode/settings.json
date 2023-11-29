@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "softwaredisk.h": "c",
-        "filesystem.h": "c"
+        "filesystem.h": "c",
+        "string.h": "c"
     }
 }

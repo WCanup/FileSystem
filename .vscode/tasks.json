@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build filesystems",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "filesystem.c",
+                "softwaredisk.c",
+                "-o",
+                "filesystem.exe"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
