@@ -140,10 +140,13 @@ static void write_inode(uint16_t idx)
         whichBlock = 0;
     }else if(index > 128 && index < 257){
         whichBlock = 1;
+        index = idx - 128;
     }else if(index > 256 && index < 385){
         whichBlock = 2;
+        index = idx - 256;
     }else if(index > 386 && index < 513){
         whichBlock = 3;
+        index = idx - 386;
     }else{
         //error error out of range
     }
