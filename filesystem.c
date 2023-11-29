@@ -132,8 +132,7 @@ static void free_block(uint16_t idx)
     data_bitmap[idx] = 0;
 }
 
-static void write_inode(uint16_t idx)
-{
+static Inode fetch_Inode(uint16_t idx){
     int index = idx;
     int whichBlock;
     //0-127 is 128 indexes
@@ -154,6 +153,13 @@ static void write_inode(uint16_t idx)
         //error error out of range
     }
     Inode inode = inode_blocks[whichBlock].IBlock[index];
+    return inode;
+}
+
+static void write_inode(uint16_t idx)
+{
+    
+    Inode inode = fetch_Inode(idx);
 
 }
 
@@ -170,14 +176,18 @@ File open_file(char *name, FileMode mode){
 File create_file(char *name){
     fserror = FS_NONE;
     File file;
-    if(find_free_inode == INT32_MAX)
+    int index = find_free_inode;
+    if(index == INT32_MAX)
     {
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
         return file;
     }
+    mark_inode(index);
     file->cursor_position = 0;
-    file->inode = 
+    file->inode = fetch_Inode(index);
+    //file->fname = *name;
+    strcpy(file->fname, name);
 
     //file->fname = name;
     
