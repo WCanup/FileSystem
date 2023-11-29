@@ -136,15 +136,17 @@ static void write_inode(uint16_t idx)
 {
     int index = idx;
     int whichBlock;
+    //0-127 is 128 indexes
     if( index >= 0 && index <= 127 ){
         whichBlock = 0;
+    //128-255
     }else if(index >= 128 && index <= 255){
         whichBlock = 1;
         index = idx - 128;
-    }else if(index >= 256 && index < 383){
+    }else if(index >= 256 && index <= 383){
         whichBlock = 2;
         index = idx - 256;
-    }else if(index >= 384 && index < 511){
+    }else if(index >= 384 && index <= 511){
         whichBlock = 3;
         index = idx - 386;
     }else{
