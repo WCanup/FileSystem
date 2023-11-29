@@ -43,7 +43,7 @@ uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE];
 // }Data_Blocks;
 
 // Data_Blocks filesystem;
-uint8_t filesystem[STARTING_SPACE] = {0};
+uint8_t filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 FSError fserror;
 
 typedef struct Inode{
@@ -59,20 +59,24 @@ typedef struct Inode_Block{
 
 }Inode_Block;
 
-typedef struct Dir_Address{
+Inode_Block inode_blocks[NUM_INODE_BLOCKS];
+
+typedef struct Dir_Entry{
 
     uint8_t name[MAX_FILENAME_SIZE];  //507 bytes
     uint16_t id;        //2 bytes
     uint8_t mode;       //1 byte
     uint16_t NT;      //2 bytes
                         //507+2+1+2 = 512
-}Dir_Address;
+}Dir_Entry;
 
 typedef struct Dir_Block{
 
-    Dir_Address dblock[DIR_ENTRIES_PER_BLOCK]; //512 * 8 = 4096
+    Dir_Entry dblock[DIR_ENTRIES_PER_BLOCK]; //512 * 8 = 4096
 
 }Dir_Block;
+
+Dir_Block directory_blocks[NUM_DIR_BLOCKS];
 
 typedef struct FileInternals{
     char *fname;
@@ -84,7 +88,7 @@ typedef struct FileInternals{
 
 static uint16_t find_free_inode(void)
 {
-    for(int i = 0; i < 512; i++)
+    for(int i = 0; i < MAX_FILES; i++)
     {
         if(inode_bitmap[0] == 0)
         {
@@ -96,9 +100,10 @@ static uint16_t find_free_inode(void)
 
 static uint32_t find_free_block(void)
 {
-    for(uint32_t i = 70; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
+    for(uint32_t i = FIRST_DATA_BLOCK; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
     {
-        if (data_bitmap[i] = 0){
+        if (data_bitmap[i] = 0)
+        {
             return i;
         }
     }
@@ -117,6 +122,21 @@ static int mark_block(uint16_t idx)
     return 1; 
 }
 
+static void free_inode(uint16_t idx)
+{
+    inode_bitmap[idx] = 0;
+}
+
+static void free_block(uint16_t idx)
+{
+    data_bitmap[idx] = 0;
+}
+
+static void write_inode(uint16_t idx)
+{
+    
+}
+
 // open existing file with pathname 'name' and access mode 'mode'.
 // Current file position is set to byte 0.  Returns NULL on
 // error. Always sets 'fserror' global.
@@ -130,6 +150,12 @@ File open_file(char *name, FileMode mode){
 File create_file(char *name){
     fserror = FS_NONE;
     File file;
+    if(find_free_inode == INT32_MAX)
+    {
+        fserror = FS_OUT_OF_SPACE;
+        fs_print_error();
+    }
+    else if()
     //file->fname = name;
     
     //find unused Inode
