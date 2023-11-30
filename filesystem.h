@@ -82,7 +82,7 @@ typedef struct Inode_Block{
 
 typedef struct Dir_Entry{
 
-    uint8_t name[MAX_FILENAME_SIZE];  //507 bytes
+    char name[MAX_FILENAME_SIZE];  //507 bytes
     uint16_t id;        //2 bytes
     uint8_t mode;       //1 byte
     //uint16_t NT;      //2 bytes

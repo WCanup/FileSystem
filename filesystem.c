@@ -9,8 +9,8 @@
 //uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
 uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
-Inode_Block inode_blocks[NUM_INODE_BLOCKS];
-Dir_Block directory_blocks[NUM_DIR_BLOCKS];
+Inode_Block inode_blocks[NUM_INODE_BLOCKS]= {0};
+Dir_Block directory_blocks[NUM_DIR_BLOCKS] = {0};
 FSError fserror;
 
 
@@ -53,6 +53,7 @@ static int find_free_block(void)
 static void mark_inode_or_dir(int idx)
 {
     inode_dir_bitmap[idx] = 1;
+
 }
 
 static void mark_block(int idx)  
@@ -143,15 +144,19 @@ static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mod
 static void init_globals()
 {
     uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
-    read_sd_block(buf, DATA_BITMAP_BLOCK);
+    bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
+    int ret = read_sd_block(buf, DATA_BITMAP_BLOCK);
     memcpy(data_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
-    read_sd_block(buf, INODE_BITMAP_BLOCK);
+
+    bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
+    ret = read_sd_block(buf, INODE_BITMAP_BLOCK);
     memcpy(inode_dir_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
 
     int z = 0;
     for(int i = FIRST_INODE_BLOCK; i <=LAST_INODE_BLOCK; i++)
     {
-        read_sd_block(buf, i);
+        bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
+        ret = read_sd_block(buf, i);
         memcpy(inode_blocks[z].IBlock, buf, SOFTWARE_DISK_BLOCK_SIZE);
         z++;
     }
@@ -159,9 +164,14 @@ static void init_globals()
     int j= 0;
     for(int i = FIRST_DIR_ENTRY_BLOCK; i <= LAST_DIR_ENTRY_BLOCK; i++)
     { 
-        read_sd_block(buf, i);
+        bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
+        ret = read_sd_block(buf, i);
         memcpy(directory_blocks[j].dblock, buf, SOFTWARE_DISK_BLOCK_SIZE);
         j++;
+        // if(i == FIRST_DIR_ENTRY_BLOCK){
+        //     for(int j = 0; j < SOFTWARE_DISK_BLOCK_SIZE; j++)
+        //     printf("%x", buf[j]);
+        // }
     }
 }
 
@@ -172,8 +182,13 @@ static void write_dir_entry_to_disk(int idx)
     int dir_block_index = idx / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
     int sd_block_index = idx / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry)) + FIRST_DIR_ENTRY_BLOCK;
     
+
+    bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
     memcpy(buf, directory_blocks[dir_block_index].dblock, sizeof(SOFTWARE_DISK_BLOCK_SIZE));
-    write_sd_block(buf, sd_block_index);
+    int ret = write_sd_block(buf, sd_block_index);
+    // for(int j = 0; j<SOFTWARE_DISK_BLOCK_SIZE; j++)(
+    //     printf("%u", directory_blocks[j])
+    // )
     //read_sd_block(buf, )
     
     
@@ -182,8 +197,9 @@ static void write_dir_entry_to_disk(int idx)
 static void write_inode_dir_bitmap_to_disk()
 {
     uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+    bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
     memcpy(buf, inode_dir_bitmap, SOFTWARE_DISK_BLOCK_SIZE);
-    write_sd_block(buf, INODE_BITMAP_BLOCK);
+    int ret = write_sd_block(buf, INODE_BITMAP_BLOCK);\
 }
 
 //static void write_file();
@@ -203,7 +219,7 @@ File create_file(char *name){
     fserror = FS_NONE;
     File file;
     file = malloc(sizeof(FileInternals));
-    init_globals();
+    //init_globals();
     int inode_dir_index = find_free_inode_or_dir();
     
     if(inode_dir_index == INT32_MAX)
@@ -220,8 +236,8 @@ File create_file(char *name){
     }
 
     mark_inode_or_dir(inode_dir_index);
-    write_inode_dir_bitmap_to_disk();
-    fetch_inode(inode_dir_index);
+    //write_inode_dir_bitmap_to_disk();
+    //fetch_inode(inode_dir_index);
     Dir_Entry *dir_entry = fetch_dir_entry(inode_dir_index);
     Inode *inode = fetch_inode(inode_dir_index);
 
@@ -233,10 +249,9 @@ File create_file(char *name){
 
 
     write_dir_entry(dir_entry, name, inode_dir_index, 'b');
-    write_dir_entry_to_disk(inode_dir_index);
-    //write_inode(inode, test, NULL, 32);
-
     printf("name contents: %s\n", dir_entry->name);
+    //write_dir_entry_to_disk(inode_dir_index);
+    //write_inode(inode, test, NULL, 32);
 
     return file;
 
@@ -384,6 +399,7 @@ int check_structure_alignment(void){
 extern FSError fserror;
 
 int main(int argc, char *argv[]){
+    init_software_disk();
     File file1 = create_file("hello");
     File file2 = create_file("hello");
     File file3 = create_file("howdy partner");
