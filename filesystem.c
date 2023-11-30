@@ -6,11 +6,11 @@
 #include <stdlib.h>
 
 
-static int find_free_inode(void)
+static int find_free_inode_or_dir(void)
 {
     for(int i = 0; i < MAX_FILES; i++)
     {
-        if(inode_bitmap[i] == 0)
+        if(inode_dir_bitmap[i] == 0)
         {
             return i;
         }
@@ -30,21 +30,21 @@ static int find_free_block(void)
     return INT32_MAX;
 }
 
-static int find_free_dir_entry(void)
-{
-    for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
-    {
-        if (dir_entry_bitmap[i] == 0)
-        {
-            return i;
-        }
-    }
-    return INT32_MAX;
-}
+// static int find_free_dir_entry(void)
+// {
+//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
+//     {
+//         if (inode_dir_bitmap[i] == 0)
+//         {
+//             return i;
+//         }
+//     }
+//     return INT32_MAX;
+// }
 
-static void mark_inode(int idx)
+static void mark_inode_or_dir(int idx)
 {
-    inode_bitmap[idx] = 1;
+    inode_dir_bitmap[idx] = 1;
 }
 
 static void mark_block(int idx)  
@@ -52,14 +52,14 @@ static void mark_block(int idx)
     data_bitmap[idx] = 1;
 }
 
-static void mark_dir_entry(int idx)
-{
-    dir_entry_bitmap[idx] = 1;
-}
+// static void mark_dir_entry(int idx)
+// {
+//     dir_entry_bitmap[idx] = 1;
+// }
 
-static void free_inode(int idx)
+static void free_inode_or_dir(int idx)
 {
-    inode_bitmap[idx] = 0;
+    inode_dir_bitmap[idx] = 0;
 }
 
 static void free_block(int idx)
@@ -67,10 +67,10 @@ static void free_block(int idx)
     data_bitmap[idx] = 0;
 }
 
-static void free_dir_entry(int idx)
-{
-    dir_entry_bitmap[idx] = 0;
-}
+// static void free_dir_entry(int idx)
+// {
+//     dir_entry_bitmap[idx] = 0;
+// }
 
 static Inode fetch_Inode(uint16_t idx){
     int index = idx;
@@ -109,7 +109,6 @@ static Dir_Entry fetch_dir_entry(int idx){
             if(j + first_dir_per_block == idx)
             {
                 result = directory_blocks[i].dblock[j];
-
                 return result;
             }
         }
@@ -134,6 +133,8 @@ static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mod
 
 }
 
+static void write_file();
+
 // open existing file with pathname 'name' and access mode 'mode'.
 // Current file position is set to byte 0.  Returns NULL on
 // error. Always sets 'fserror' global.
@@ -149,12 +150,10 @@ File create_file(char *name){
     fserror = FS_NONE;
     File file;
     file = malloc(sizeof(FileInternals));
-    int inode_index = find_free_inode();
+    int inode_dir_index = find_free_inode_or_dir();
     int data_index = find_free_block();
-    int dir_entry_index = find_free_dir_entry();
-
     
-    if(inode_index == INT32_MAX)
+    if(inode_dir_index == INT32_MAX)
     {
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
@@ -166,8 +165,6 @@ File create_file(char *name){
         fs_print_error();
         return NULL;
     }
-
-
     if(file_exists(name))
     {
         fserror = FS_FILE_ALREADY_EXISTS;
@@ -175,23 +172,20 @@ File create_file(char *name){
         return NULL;
     }
 
-    mark_dir_entry(dir_entry_index);
-    mark_inode(inode_index);
-    fetch_Inode(inode_index);
+    mark_inode_or_dir(inode_dir_index);
+    fetch_Inode(inode_dir_index);
     mark_block(data_index);
 
-
     file->cursor_position = 0;
-
-    file->inode = fetch_Inode(inode_index);
+    file->inode = fetch_Inode(inode_dir_index);
     strcpy(file->fname, name);
     file->mode = READ_WRITE;
     file->size = 0;
 
-    int dir_block_index = dir_entry_index / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
-    int dir_entry_block_index = dir_entry_index % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    int dir_block_index = inode_dir_index / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    int dir_entry_block_index = inode_dir_index % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
 
-    write_dir_entry(&directory_blocks[dir_block_index].dblock[dir_entry_block_index], name, dir_entry_index, 'b');
+    write_dir_entry(&directory_blocks[dir_block_index].dblock[dir_entry_block_index], name, inode_dir_index, 'b');
 
     printf("name contents: %s\n", file->fname);
     free(file);
@@ -251,7 +245,7 @@ int file_exists(char *name){
     for(int i = 0; i < NUM_DIR_BLOCKS * DIR_ENTRIES_PER_BLOCK; i++)
     {
         //printf("value of i: %d\n", i);
-        if(dir_entry_bitmap[i] == 1)
+        if(inode_dir_bitmap[i] == 1)
         {
             int dir_block_index = i / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
             int dir_entry_index = i % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));

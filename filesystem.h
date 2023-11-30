@@ -44,8 +44,8 @@ typedef enum {
 
 uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
 uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
-uint8_t inode_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
-uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+//uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
 // typedef struct DataBlock{
 //     char data[1];
@@ -56,7 +56,7 @@ uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 // }Data_Blocks;
 
 // Data_Blocks filesystem;
-uint8_t filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+File filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
 
 typedef struct Indirect_Inode{
