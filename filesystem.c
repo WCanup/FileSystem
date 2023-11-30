@@ -5,12 +5,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-
 //uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
 uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 Inode_Block inode_blocks[NUM_INODE_BLOCKS]= {0};
 Dir_Block directory_blocks[NUM_DIR_BLOCKS] = {0};
+DataBlock data_blocks[SOFTWARE_DISK_BLOCK_SIZE] = {0}; // Initialize all elements to 0
 FSError fserror;
 
 
@@ -38,18 +38,6 @@ static int find_free_block(void)
     return INT32_MAX;
 }
 
-// static int find_free_dir_entry(void)
-// {
-//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE; i++)
-//     {
-//         if (inode_dir_bitmap[i] == 0)
-//         {
-//             return i;
-//         }
-//     }
-//     return INT32_MAX;
-// }
-
 static void mark_inode_or_dir(int idx)
 {
     inode_dir_bitmap[idx] = 1;
@@ -61,11 +49,6 @@ static void mark_block(int idx)
     data_bitmap[idx] = 1;
 }
 
-// static void mark_dir_entry(int idx)
-// {
-//     dir_entry_bitmap[idx] = 1;
-// }
-
 static void free_inode_or_dir(int idx)
 {
     inode_dir_bitmap[idx] = 0;
@@ -75,11 +58,6 @@ static void free_block(int idx)
 {
     data_bitmap[idx] = 0;
 }
-
-// static void free_dir_entry(int idx)
-// {
-//     dir_entry_bitmap[idx] = 0;
-// }
 
 static Inode* fetch_inode(uint16_t idx){
     int index = idx;
@@ -105,24 +83,31 @@ static Inode* fetch_inode(uint16_t idx){
     return inode;
 }
 
-static void fetch_data_block(int idx){
+static DataBlock* fetch_data_blocks(int num_blocks, uint16_t *indices){
 
+    DataBlock *blocks = malloc(num_blocks * sizeof(DataBlock));
+
+    for (int i = 0; i < num_blocks; ++i) {
+        int idx = find_free_block();
+        if(i >= SOFTWARE_DISK_BLOCK_SIZE)
+        {
+            fserror = FS_OUT_OF_SPACE;
+            return blocks;
+        }
+        mark_block(idx);
+        blocks[i] = data_blocks[idx];
+        indices[i] = idx;
+        // printf("value of index: %d", idx);
+    }
+
+    return blocks;
 }
 
 static Dir_Entry* fetch_dir_entry(int idx){
 
-    for(int i = 0; i < NUM_DIR_BLOCKS * DIR_ENTRIES_PER_BLOCK; i++)
-    {
-        //printf("value of i: %d\n", i);
-        if(inode_dir_bitmap[i] == 1)
-        {
-            int dir_block_index = i / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
-            int dir_entry_index = i % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
-            return &directory_blocks[dir_block_index].dblock[dir_entry_index];
-        }
-    }
-    return NULL;
-
+    int dir_block_index = idx / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    int dir_entry_index = idx % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    return &directory_blocks[dir_block_index].dblock[dir_entry_index];
 }
 
 static void write_inode(Inode *inode, uint16_t direct_addr[], uint16_t indirect_inode, uint32_t size)
@@ -133,12 +118,33 @@ static void write_inode(Inode *inode, uint16_t direct_addr[], uint16_t indirect_
     
 }
 
-static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mode)
+static void write_dir_entry(Dir_Entry *dir_entry, char *name, int id, uint8_t mode)
 {
     strcpy(dir_entry->name, name);
-    dir_entry->id = id;
+    dir_entry->id = (uint16_t)id;
     dir_entry->mode = mode;
+}
 
+static unsigned long write_data_blocks(char buf[], uint16_t indicies[], int num_blocks, unsigned long numbytes)
+{
+    int current_bytes = numbytes;
+    int byte_count = 0;
+    for(int i = 0; i < num_blocks; i++)
+    {
+        
+        char *buf_start = buf + i * SOFTWARE_DISK_BLOCK_SIZE;
+        if(current_bytes >= SOFTWARE_DISK_BLOCK_SIZE){
+        memcpy(data_blocks[indicies[i]].block, buf_start, SOFTWARE_DISK_BLOCK_SIZE);
+        byte_count += SOFTWARE_DISK_BLOCK_SIZE;
+        }
+        else if(current_bytes < SOFTWARE_DISK_BLOCK_SIZE)
+        {
+            memcpy(data_blocks[indicies[i]].block, buf_start, current_bytes);
+            byte_count+= current_bytes;
+        }
+        current_bytes -= SOFTWARE_DISK_BLOCK_SIZE;
+    }
+    return byte_count;
 }
 
 static void init_globals()
@@ -171,7 +177,7 @@ static void init_globals()
         // if(i == FIRST_DIR_ENTRY_BLOCK){
         //     for(int j = 0; j < SOFTWARE_DISK_BLOCK_SIZE; j++)
         //     printf("%x", buf[j]);
-        // }
+        //}
     }
 }
 
@@ -184,12 +190,13 @@ static void write_dir_entry_to_disk(int idx)
     
 
     bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
-    memcpy(buf, directory_blocks[dir_block_index].dblock, sizeof(SOFTWARE_DISK_BLOCK_SIZE));
+    memcpy(buf, directory_blocks[dir_block_index].dblock, SOFTWARE_DISK_BLOCK_SIZE);
     int ret = write_sd_block(buf, sd_block_index);
-    // for(int j = 0; j<SOFTWARE_DISK_BLOCK_SIZE; j++)(
-    //     printf("%u", directory_blocks[j])
-    // )
-    //read_sd_block(buf, )
+
+    // for(int j = 0; j<SOFTWARE_DISK_BLOCK_SIZE; j++){
+    //     printf("%c", directory_blocks[dir_block_index].dblock);
+    // }
+    
     
     
 }
@@ -199,7 +206,30 @@ static void write_inode_dir_bitmap_to_disk()
     uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
     bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
     memcpy(buf, inode_dir_bitmap, SOFTWARE_DISK_BLOCK_SIZE);
-    int ret = write_sd_block(buf, INODE_BITMAP_BLOCK);\
+    int ret = write_sd_block(buf, INODE_BITMAP_BLOCK);
+}
+
+static void write_data_blocks_to_disk(int num_blocks, uint16_t indicies[], unsigned long numbytes)
+{
+    int ret;
+    int current_bytes = numbytes;
+    for(int i = 0; i < num_blocks; i++)
+    {
+        uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+        bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
+        ret = read_sd_block(buf, indicies[i]);
+        if(current_bytes >= SOFTWARE_DISK_BLOCK_SIZE){
+            memcpy(buf, data_blocks[indicies[i]].block, SOFTWARE_DISK_BLOCK_SIZE);
+        }
+        else if(current_bytes < SOFTWARE_DISK_BLOCK_SIZE){
+            memcpy(buf, data_blocks[indicies[i]].block, current_bytes);
+        }
+
+        write_sd_block(buf, indicies[i]);
+        current_bytes = current_bytes - SOFTWARE_DISK_BLOCK_SIZE;
+    }
+
+
 }
 
 //static void write_file();
@@ -219,7 +249,7 @@ File create_file(char *name){
     fserror = FS_NONE;
     File file;
     file = malloc(sizeof(FileInternals));
-    //init_globals();
+    init_globals();
     int inode_dir_index = find_free_inode_or_dir();
     
     if(inode_dir_index == INT32_MAX)
@@ -236,7 +266,7 @@ File create_file(char *name){
     }
 
     mark_inode_or_dir(inode_dir_index);
-    //write_inode_dir_bitmap_to_disk();
+    write_inode_dir_bitmap_to_disk();
     //fetch_inode(inode_dir_index);
     Dir_Entry *dir_entry = fetch_dir_entry(inode_dir_index);
     Inode *inode = fetch_inode(inode_dir_index);
@@ -245,12 +275,12 @@ File create_file(char *name){
     file->cursor_position = 0;
     file->inode = inode;
     file->mode = READ_WRITE;
-    uint16_t test[NUM_DIRECT_INODE_BLOCKS] = {3};
+    //uint16_t test[NUM_DIRECT_INODE_BLOCKS] = {3};
 
 
     write_dir_entry(dir_entry, name, inode_dir_index, 'b');
-    printf("name contents: %s\n", dir_entry->name);
-    //write_dir_entry_to_disk(inode_dir_index);
+
+    write_dir_entry_to_disk(inode_dir_index);
     //write_inode(inode, test, NULL, 32);
 
     return file;
@@ -276,9 +306,23 @@ unsigned long read_file(File file, void *buf, unsigned long numbytes){
 // error, the return value may be less than 'numbytes'.  Always sets
 // 'fserror' global.
 unsigned long write_file(File file, void *buf, unsigned long numbytes){
-    //compare the numbytes + size of our file
-    //write opertation exceeds a data blocks capacity
-    //
+
+    fserror = FS_NONE;
+    Inode *inode = file->inode;
+    // uint16_t test[NUM_DIRECT_INODE_BLOCKS] = {3};
+    int num_blocks = (inode->size + numbytes + SOFTWARE_DISK_BLOCK_SIZE - 1) / SOFTWARE_DISK_BLOCK_SIZE;
+    uint16_t indicies[num_blocks];
+    DataBlock *blocks = fetch_data_blocks(num_blocks, indicies);
+    //printf("value of index: %d", indicies[1]);
+    write_inode(file->inode, indicies, 0, inode->size + numbytes);
+    // printf("idcontents: %d\n", inode->size);
+    unsigned long ret = write_data_blocks(buf, indicies, num_blocks, numbytes);
+    write_data_blocks_to_disk(num_blocks, indicies, numbytes);
+
+    return ret;
+
+    //currently doesn't handle indirect inode allocation
+
 }
 
 // sets current position in file to 'bytepos', always relative to the
@@ -319,19 +363,6 @@ int file_exists(char *name){
         }
     }
     return 0;
-
-    // int first_dir_per_block = 0;
-    // for(int i = 0; i < NUM_DIR_BLOCKS; i++){
-    //     for(int j = 0; j < DIR_ENTRIES_PER_BLOCK; i++){
-    //         if(strcmp(!directory_blocks[i].dblock[j].name, name)){
-    //             printf("new file name:%s\nold file name: %s\n", name, directory_blocks[i].dblock[j].name);
-    //             fserror = FS_FILE_ALREADY_EXISTS;
-    //             return 1;
-    //         }
-    //     }
-    //     first_dir_per_block = first_dir_per_block + DIR_ENTRIES_PER_BLOCK;
-    // }
-    // return 0;
 
 }
 
@@ -398,12 +429,24 @@ int check_structure_alignment(void){
 // filesystem error code set (set by each filesystem function)
 extern FSError fserror;
 
-int main(int argc, char *argv[]){
-    init_software_disk();
-    File file1 = create_file("hello");
-    File file2 = create_file("hello");
-    File file3 = create_file("howdy partner");
-    File file4 = create_file("howdy partner");
+// int main(int argc, char *argv[]){
+//     init_software_disk();
+//     check_structure_alignment();
+//     File file1 = create_file("hello");
+//     // File file2 = create_file("hello");
+//     // File file3 = create_file("howdy partner");
+//     // File file4 = create_file("howdy partner");
+//     char buf[SOFTWARE_DISK_BLOCK_SIZE];
+//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++){
+//     memset(buf, "A"+i, SOFTWARE_DISK_BLOCK_SIZE-1000);
+//     }
+//     write_file(file1, buf, sizeof(buf));
 
-    return 0;
-}
+//     read_sd_block(buf, 70);
+//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++)
+//     {
+//         printf("%c", buf[i]);
+//     }
+
+//     return 0;
+// }

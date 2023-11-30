@@ -78,8 +78,6 @@ typedef struct Inode_Block{
 
 }Inode_Block;
 
-
-
 typedef struct Dir_Entry{
 
     char name[MAX_FILENAME_SIZE];  //507 bytes
@@ -95,6 +93,9 @@ typedef struct Dir_Block{
 
 }Dir_Block;
 
+typedef struct DataBlock{
+    uint8_t block[SOFTWARE_DISK_BLOCK_SIZE];
+}DataBlock;
 
 
 typedef struct FileInternals{
