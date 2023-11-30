@@ -42,9 +42,7 @@ typedef enum {
 	READ_ONLY, READ_WRITE
 } FileMode;
 
-uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
-uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
-uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+
 //uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
 // typedef struct DataBlock{
@@ -56,20 +54,20 @@ uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 // }Data_Blocks;
 
 // Data_Blocks filesystem;
-File filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+//File filesystem[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
 
-typedef struct Indirect_Inode{
-  uint16_t data_block_idx;
-}Indirect_Inode;
+// typedef struct Indirect_Inode{
+//   uint16_t data_block_idx;
+// }Indirect_Inode;
 
-typedef struct Indirect_Inode_Block{
-  uint8_t i_iblock[SOFTWARE_DISK_BLOCK_SIZE];
-}Indirect_Inode_Block;
+// typedef struct Indirect_Inode_Block{
+//   uint8_t i_iblock[SOFTWARE_DISK_BLOCK_SIZE];
+// }Indirect_Inode_Block;
 
 typedef struct Inode{
     uint16_t direct_addresses[NUM_DIRECT_INODE_BLOCKS]; //26 bytes
-    Indirect_Inode indirect;       //2 bytes
+    uint16_t indirect;       //2 bytes
     uint32_t size;                 //4 bytes
                                    //26+2+4 = 32 bytes
 }Inode;
@@ -80,11 +78,11 @@ typedef struct Inode_Block{
 
 }Inode_Block;
 
-Inode_Block inode_blocks[NUM_INODE_BLOCKS];
+
 
 typedef struct Dir_Entry{
 
-    char *name[MAX_FILENAME_SIZE];  //507 bytes
+    uint8_t name[MAX_FILENAME_SIZE];  //507 bytes
     uint16_t id;        //2 bytes
     uint8_t mode;       //1 byte
     //uint16_t NT;      //2 bytes
@@ -97,14 +95,14 @@ typedef struct Dir_Block{
 
 }Dir_Block;
 
-Dir_Block directory_blocks[NUM_DIR_BLOCKS];
+
 
 typedef struct FileInternals{
-    char fname[MAX_FILENAME_SIZE];
-    uint32_t size;
+    //char fname[MAX_FILENAME_SIZE];
+    //uint32_t size;
     FileMode mode;
     uint32_t cursor_position;
-    Inode inode;
+    Inode *inode;
 }FileInternals;
 
 typedef struct FileInternals* File;
@@ -123,7 +121,7 @@ typedef enum  {
   FS_IO_ERROR              // something really bad happened
 } FSError;
 
-FSError fserror;
+
 
 // function prototypes for filesystem API
 

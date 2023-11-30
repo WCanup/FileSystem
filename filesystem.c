@@ -6,6 +6,14 @@
 #include <stdlib.h>
 
 
+//uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+uint8_t data_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+uint8_t inode_dir_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
+Inode_Block inode_blocks[NUM_INODE_BLOCKS];
+Dir_Block directory_blocks[NUM_DIR_BLOCKS];
+FSError fserror;
+
+
 static int find_free_inode_or_dir(void)
 {
     for(int i = 0; i < MAX_FILES; i++)
@@ -72,7 +80,7 @@ static void free_block(int idx)
 //     dir_entry_bitmap[idx] = 0;
 // }
 
-static Inode fetch_Inode(uint16_t idx){
+static Inode* fetch_inode(uint16_t idx){
     int index = idx;
     int whichBlock;
     //0-127 is 128 indexes
@@ -87,12 +95,12 @@ static Inode fetch_Inode(uint16_t idx){
         index = idx - 256;
     }else if(index >= 384 && index <= 511){
         whichBlock = 3;
-        index = idx - 386;
+        index = idx - 384;
     }else{
         fserror = FS_OUT_OF_SPACE;
         //error error out of range
     }
-    Inode inode = inode_blocks[whichBlock].IBlock[index];
+    Inode *inode = &inode_blocks[whichBlock].IBlock[index];
     return inode;
 }
 
@@ -100,29 +108,28 @@ static void fetch_data_block(int idx){
 
 }
 
-static Dir_Entry fetch_dir_entry(int idx){
-    int first_dir_per_block = 0;
-    Dir_Entry result;
-    for(int i = 0; i < NUM_DIR_BLOCKS; i++)
+static Dir_Entry* fetch_dir_entry(int idx){
+
+    for(int i = 0; i < NUM_DIR_BLOCKS * DIR_ENTRIES_PER_BLOCK; i++)
     {
-        for(int j = 0; j < DIR_ENTRIES_PER_BLOCK; j++){
-            if(j + first_dir_per_block == idx)
-            {
-                result = directory_blocks[i].dblock[j];
-                return result;
-            }
+        //printf("value of i: %d\n", i);
+        if(inode_dir_bitmap[i] == 1)
+        {
+            int dir_block_index = i / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+            int dir_entry_index = i % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+            return &directory_blocks[dir_block_index].dblock[dir_entry_index];
         }
-        first_dir_per_block = first_dir_per_block + DIR_ENTRIES_PER_BLOCK;
     }
-    return result;
+    return NULL;
+
 }
 
-static void write_inode(uint16_t idx, uint16_t direct_addr[], uint16_t indirect_inode, uint32_t i_size)
+static void write_inode(Inode *inode, uint16_t direct_addr[], uint16_t indirect_inode, uint32_t size)
 {
-    Inode inode = fetch_Inode(idx);
-    memcpy(inode.direct_addresses, direct_addr, sizeof(inode.direct_addresses));
-
-
+    memcpy(inode->direct_addresses, direct_addr, sizeof(uint16_t[NUM_DIRECT_INODE_BLOCKS]));
+    inode->indirect = indirect_inode;
+    inode->size = size;
+    
 }
 
 static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mode)
@@ -133,7 +140,53 @@ static void write_dir_entry(Dir_Entry *dir_entry, char *name[], int id, char mod
 
 }
 
-static void write_file();
+static void init_globals()
+{
+    uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+    read_sd_block(buf, DATA_BITMAP_BLOCK);
+    memcpy(data_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
+    read_sd_block(buf, INODE_BITMAP_BLOCK);
+    memcpy(inode_dir_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
+
+    int z = 0;
+    for(int i = FIRST_INODE_BLOCK; i <=LAST_INODE_BLOCK; i++)
+    {
+        read_sd_block(buf, i);
+        memcpy(inode_blocks[z].IBlock, buf, SOFTWARE_DISK_BLOCK_SIZE);
+        z++;
+    }
+
+    int j= 0;
+    for(int i = FIRST_DIR_ENTRY_BLOCK; i <= LAST_DIR_ENTRY_BLOCK; i++)
+    { 
+        read_sd_block(buf, i);
+        memcpy(directory_blocks[j].dblock, buf, SOFTWARE_DISK_BLOCK_SIZE);
+        j++;
+    }
+}
+
+static void write_dir_entry_to_disk(int idx)
+{
+    uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+
+    int dir_block_index = idx / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
+    int sd_block_index = idx / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry)) + FIRST_DIR_ENTRY_BLOCK;
+    
+    memcpy(buf, directory_blocks[dir_block_index].dblock, sizeof(SOFTWARE_DISK_BLOCK_SIZE));
+    write_sd_block(buf, sd_block_index);
+    //read_sd_block(buf, )
+    
+    
+}
+
+static void write_inode_dir_bitmap_to_disk()
+{
+    uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+    memcpy(buf, inode_dir_bitmap, SOFTWARE_DISK_BLOCK_SIZE);
+    write_sd_block(buf, INODE_BITMAP_BLOCK);
+}
+
+//static void write_file();
 
 // open existing file with pathname 'name' and access mode 'mode'.
 // Current file position is set to byte 0.  Returns NULL on
@@ -150,16 +203,10 @@ File create_file(char *name){
     fserror = FS_NONE;
     File file;
     file = malloc(sizeof(FileInternals));
+    init_globals();
     int inode_dir_index = find_free_inode_or_dir();
-    int data_index = find_free_block();
     
     if(inode_dir_index == INT32_MAX)
-    {
-        fserror = FS_OUT_OF_SPACE;
-        fs_print_error();
-        return NULL;
-    }
-    if(data_index == INT32_MAX)
     {
         fserror = FS_OUT_OF_SPACE;
         fs_print_error();
@@ -173,22 +220,23 @@ File create_file(char *name){
     }
 
     mark_inode_or_dir(inode_dir_index);
-    fetch_Inode(inode_dir_index);
-    mark_block(data_index);
+    write_inode_dir_bitmap_to_disk();
+    fetch_inode(inode_dir_index);
+    Dir_Entry *dir_entry = fetch_dir_entry(inode_dir_index);
+    Inode *inode = fetch_inode(inode_dir_index);
+
 
     file->cursor_position = 0;
-    file->inode = fetch_Inode(inode_dir_index);
-    strcpy(file->fname, name);
+    file->inode = inode;
     file->mode = READ_WRITE;
-    file->size = 0;
+    uint16_t test[NUM_DIRECT_INODE_BLOCKS] = {3};
 
-    int dir_block_index = inode_dir_index / (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
-    int dir_entry_block_index = inode_dir_index % (SOFTWARE_DISK_BLOCK_SIZE / sizeof(Dir_Entry));
 
-    write_dir_entry(&directory_blocks[dir_block_index].dblock[dir_entry_block_index], name, inode_dir_index, 'b');
+    write_dir_entry(dir_entry, name, inode_dir_index, 'b');
+    write_dir_entry_to_disk(inode_dir_index);
+    //write_inode(inode, test, NULL, 32);
 
-    printf("name contents: %s\n", file->fname);
-    free(file);
+    printf("name contents: %s\n", dir_entry->name);
 
     return file;
 
@@ -316,7 +364,7 @@ void fs_print_error(void){
 int check_structure_alignment(void){
 
     printf("Expecting sizeof(Inode) = 32, actual = %llu\n", sizeof(Inode));
-    printf("Expecting sizeof(Indirect_Inode_Block) = 4096, actual = %llu\n", sizeof(Indirect_Inode_Block));
+    //printf("Expecting sizeof(Indirect_Inode_Block) = 4096, actual = %lu\n", sizeof(Indirect_Inode_Block));
     printf("Expecting sizeof(Inode_Block) = %d, actual = %llu\n", SOFTWARE_DISK_BLOCK_SIZE,sizeof(Inode_Block));
     printf("Expecting sizeof(Dir_Entry) = 512, actual = %llu\n", sizeof(Dir_Entry));
     printf("Expecting sizeof(Dir_Block) = %d, actual = %llu\n", SOFTWARE_DISK_BLOCK_SIZE, sizeof(Dir_Block));
@@ -340,8 +388,6 @@ int main(int argc, char *argv[]){
     File file2 = create_file("hello");
     File file3 = create_file("howdy partner");
     File file4 = create_file("howdy partner");
-
-
 
     return 0;
 }
