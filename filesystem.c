@@ -232,7 +232,7 @@ static void write_data_blocks_to_disk(int num_blocks, uint16_t indicies[], unsig
 
 }
 
-//static void write_file();
+
 
 // open existing file with pathname 'name' and access mode 'mode'.
 // Current file position is set to byte 0.  Returns NULL on
@@ -299,6 +299,30 @@ void close_file(File file){
 // 'fserror' global.
 unsigned long read_file(File file, void *buf, unsigned long numbytes){
 
+    int num_blocks = (file->inode->size + numbytes + SOFTWARE_DISK_BLOCK_SIZE - 1) / SOFTWARE_DISK_BLOCK_SIZE;
+    int pos_in_block = -1;
+    int starting_block_index = -1;
+    for(int i = 0; i < num_blocks; i++)
+    {
+        while(pos_in_block != -1){
+            if(file->cursor_position < SOFTWARE_DISK_BLOCK_SIZE * i && i != 0)
+            {
+                pos_in_block = (SOFTWARE_DISK_BLOCK_SIZE * i + 1) - file->cursor_position;
+                starting_block_index = i;
+            }
+            else if(i = 0)
+            {
+                pos_in_block = file->cursor_position;
+                starting_block_index = 0;
+            }
+        }
+    }
+    //can't read more than numbytes
+    //starts at data_blocks[file->inode->direct_addresses[i]].block[pos_in_block]
+    //stops if end of file is reached
+    // for(int i = starting_block_index; i <)
+    // memcpy(buf, data_blocks[file->inode->direct_addresses[i]].block[pos_in_block], )
+
 }
 
 // write 'numbytes' of data from 'buf' into 'file' at the current file
@@ -330,6 +354,15 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
 // extend the file. Returns 1 on success and 0 on failure.  Always
 // sets 'fserror' global.
 int seek_file(File file, unsigned long bytepos){
+    if(bytepos > file->inode->size)
+    {
+        fserror = FS_EXCEEDS_MAX_FILE_SIZE;
+        return 0;
+    }
+    fserror = FS_NONE;
+    file->cursor_position = bytepos;
+    // printf("%u", file->cursor_position);
+    return 1;
 
 }
 

@@ -42,6 +42,11 @@ typedef enum {
 	READ_ONLY, READ_WRITE
 } FileMode;
 
+typedef enum {
+	OPEN, CLOSED
+}AccessMode;
+
+
 
 //uint8_t dir_entry_bitmap[SOFTWARE_DISK_BLOCK_SIZE] = {0};
 
@@ -101,7 +106,7 @@ typedef struct DataBlock{
 typedef struct FileInternals{
     //char fname[MAX_FILENAME_SIZE];
     //uint32_t size;
-    FileMode mode;
+    AccessMode mode;
     uint32_t cursor_position;
     Inode *inode;
 }FileInternals;
