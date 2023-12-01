@@ -105,7 +105,7 @@ typedef struct DataBlock{
 
 typedef struct FileInternals{
     //char fname[MAX_FILENAME_SIZE];
-    //uint32_t size;
+    uint32_t size;
     AccessMode mode;
     uint32_t cursor_position;
     Inode *inode;

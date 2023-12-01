@@ -32,7 +32,7 @@ static int find_free_block(void)
     {
         if (data_bitmap[i] == 0)
         {
-            return i;
+            return i ;
         }
     }
     return INT32_MAX;
@@ -80,6 +80,11 @@ static Inode* fetch_inode(uint16_t idx){
         //error error out of range
     }
     Inode *inode = &inode_blocks[whichBlock].IBlock[index];
+    
+    //WILL CODE
+    inode->indirect = 0;
+    inode->size = 0;
+
     return inode;
 }
 
@@ -87,12 +92,15 @@ static DataBlock* fetch_data_blocks(int num_blocks, uint16_t *indices){
 
     DataBlock *blocks = malloc(num_blocks * sizeof(DataBlock));
 
-    for (int i = 0; i < num_blocks; ++i) {
-        int idx = find_free_block();
-        if(i >= SOFTWARE_DISK_BLOCK_SIZE)
+    for (int i = 0; i < num_blocks; i++) {
+
+        int idx = find_free_block();//find_free_block() returns INT32_MAX if there is no space left
+        
+        if(idx == INT32_MAX)
         {
             fserror = FS_OUT_OF_SPACE;
-            return blocks;
+            free(blocks);
+            return NULL;
         }
         mark_block(idx);
         blocks[i] = data_blocks[idx];
@@ -110,12 +118,93 @@ static Dir_Entry* fetch_dir_entry(int idx){
     return &directory_blocks[dir_block_index].dblock[dir_entry_index];
 }
 
-static void write_inode(Inode *inode, uint16_t direct_addr[], uint16_t indirect_inode, uint32_t size)
-{
-    memcpy(inode->direct_addresses, direct_addr, sizeof(uint16_t[NUM_DIRECT_INODE_BLOCKS]));
-    inode->indirect = indirect_inode;
-    inode->size = size;
+static unsigned long write_inode(Inode *inode, uint16_t addresses[], uint16_t indirect_inode)
+{   
     
+
+    int num_New_Addresses;
+    int num_Addresses_Already_In_Inode;
+    int num_Addresses_To_Add_In_Direct;
+    int num_Addresses_To_Add_In_Indirect;
+    int num_Of_Indirect_Addresses_In_Inode;
+
+    num_New_Addresses = sizeof(addresses)/sizeof(uint16_t);
+    num_Addresses_Already_In_Inode = inode->size;
+
+    //if inode already uses indirect block then set numToAdd to be 0
+    num_Addresses_To_Add_In_Direct = 13 - num_Addresses_Already_In_Inode; if( num_Addresses_To_Add_In_Direct < 0){num_Addresses_To_Add_In_Direct = 0;}
+    //if inode does not need indirect block then set numToAdd to be 0
+    num_Addresses_To_Add_In_Indirect = num_New_Addresses - num_Addresses_To_Add_In_Direct; if(num_Addresses_To_Add_In_Indirect < 0){num_Addresses_To_Add_In_Indirect = 0;}
+    //if you cannot add all addresses without breaking the bounds of the block then return zero and set fserror
+    num_Of_Indirect_Addresses_In_Inode = num_Addresses_Already_In_Inode - 13;if(num_Of_Indirect_Addresses_In_Inode + num_New_Addresses > 2048){fserror = FS_EXCEEDS_MAX_FILE_SIZE;  return 0;}
+
+    if(num_Addresses_Already_In_Inode == 0 && num_New_Addresses <= 13)
+    {
+        //copy the addresses into the Inode with no extra logic
+        
+        memcpy(inode->direct_addresses, addresses, sizeof(uint16_t[NUM_DIRECT_INODE_BLOCKS]));
+        uint32_t number = num_New_Addresses;
+        inode->size = number;
+        return 1;
+    }else{ 
+        
+        if(num_Addresses_To_Add_In_Direct > 0){
+
+            //get sam to look over this pretty please
+            memcpy(inode->direct_addresses+(num_Addresses_Already_In_Inode*2)+1, addresses, (num_Addresses_To_Add_In_Direct*2));
+            uint32_t number = num_Addresses_To_Add_In_Direct;
+            inode->size = inode->size + number;
+            return 1;
+        }
+
+        if(num_Addresses_To_Add_In_Indirect > 0){
+        
+            //give inode an index for its indirect block
+            if(inode->indirect == 0){
+                inode->indirect = find_free_block();
+                mark_block(inode->indirect);
+            }
+
+            //Are the direct addresses filled up and therefore do we need to worry about spacing?
+            if(num_Addresses_To_Add_In_Direct == 0){
+
+                //Is the indirect block empty and therefore do we need to worry about spacing?
+                if(num_Of_Indirect_Addresses_In_Inode == 0){
+
+                    memcpy(data_blocks[inode->indirect].block, addresses, (num_Addresses_To_Add_In_Indirect*2));
+                    uint32_t number = num_Addresses_To_Add_In_Indirect;
+                    inode->size = inode->size + number;
+                    return 1;
+
+                }else{
+
+                    memcpy(data_blocks[inode->indirect].block+(num_Of_Indirect_Addresses_In_Inode*2)+1, addresses, (num_Addresses_To_Add_In_Indirect*2));
+                    uint32_t number = num_Addresses_To_Add_In_Indirect;
+                    inode->size = inode->size + number;
+                    return 1;
+                }
+            }else{
+
+                if(num_Of_Indirect_Addresses_In_Inode == 0){
+
+                    memcpy(data_blocks[inode->indirect].block, addresses + (num_Addresses_To_Add_In_Direct*2)+1, (num_Addresses_To_Add_In_Indirect*2));
+                    uint32_t number = num_Addresses_To_Add_In_Indirect;
+                    inode->size = inode->size + number;
+                    return 1;
+
+                }else{
+
+                    memcpy(data_blocks[inode->indirect].block+(num_Of_Indirect_Addresses_In_Inode*2)+1, addresses + (num_Addresses_To_Add_In_Direct*2)+1, (num_Addresses_To_Add_In_Indirect*2));
+                    uint32_t number = num_Addresses_To_Add_In_Indirect;
+                    inode->size = inode->size + number;
+                    return 1;
+                }
+            }
+            
+            
+        }
+    }
+    return 2;
 }
 
 static void write_dir_entry(Dir_Entry *dir_entry, char *name, int id, uint8_t mode)
@@ -150,10 +239,11 @@ static unsigned long write_data_blocks(char buf[], uint16_t indicies[], int num_
 static void init_globals()
 {
     uint8_t buf[SOFTWARE_DISK_BLOCK_SIZE];
+    //
     bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
     int ret = read_sd_block(buf, DATA_BITMAP_BLOCK);
     memcpy(data_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
-
+    //
     bzero(buf, SOFTWARE_DISK_BLOCK_SIZE);
     ret = read_sd_block(buf, INODE_BITMAP_BLOCK);
     memcpy(inode_dir_bitmap, buf, SOFTWARE_DISK_BLOCK_SIZE);
@@ -331,17 +421,33 @@ unsigned long read_file(File file, void *buf, unsigned long numbytes){
 // 'fserror' global.
 unsigned long write_file(File file, void *buf, unsigned long numbytes){
 
+    /*
+    //PARAMS:
+    //
+    // *inode : the pointer to the inode associated with this file
+    // num_blocks : the number of blocks that will need to be allocated for this write operation
+    // 
+    // *blocks : the actual data block structures
+    //  indicies : array that contains the addresses of the blocks
+    //
+    */
+    unsigned long ret;
     fserror = FS_NONE;
     Inode *inode = file->inode;
     // uint16_t test[NUM_DIRECT_INODE_BLOCKS] = {3};
-    int num_blocks = (inode->size + numbytes + SOFTWARE_DISK_BLOCK_SIZE - 1) / SOFTWARE_DISK_BLOCK_SIZE;
+    int num_blocks = (file->size + numbytes + SOFTWARE_DISK_BLOCK_SIZE - 1) / SOFTWARE_DISK_BLOCK_SIZE;
+    
     uint16_t indicies[num_blocks];
     DataBlock *blocks = fetch_data_blocks(num_blocks, indicies);
-    //printf("value of index: %d", indicies[1]);
-    write_inode(file->inode, indicies, 0, inode->size + numbytes);
-    // printf("idcontents: %d\n", inode->size);
-    unsigned long ret = write_data_blocks(buf, indicies, num_blocks, numbytes);
+    
+    //NOTE TO SELF I TOOK OUT inode->size because I just wanted the numbytes to add to it;
+    ret = write_inode(file->inode, indicies, file->inode->indirect);
+    if(ret == 1){
+    ret = write_data_blocks(buf, indicies, num_blocks, numbytes);
+    }
+    if(ret == 1){
     write_data_blocks_to_disk(num_blocks, indicies, numbytes);
+    }
 
     return ret;
 
@@ -462,24 +568,24 @@ int check_structure_alignment(void){
 // filesystem error code set (set by each filesystem function)
 extern FSError fserror;
 
-// int main(int argc, char *argv[]){
-//     init_software_disk();
-//     check_structure_alignment();
-//     File file1 = create_file("hello");
-//     // File file2 = create_file("hello");
-//     // File file3 = create_file("howdy partner");
-//     // File file4 = create_file("howdy partner");
-//     char buf[SOFTWARE_DISK_BLOCK_SIZE];
-//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++){
-//     memset(buf, "A"+i, SOFTWARE_DISK_BLOCK_SIZE-1000);
-//     }
-//     write_file(file1, buf, sizeof(buf));
+int main(int argc, char *argv[]){
+    init_software_disk();
+    check_structure_alignment();
+    File file1 = create_file("hello");
+    File file2 = create_file("hello");
+    File file3 = create_file("howdy partner");
+    File file4 = create_file("howdy partner");
+    char buf[SOFTWARE_DISK_BLOCK_SIZE];
+    for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++){
+    memset(buf, "B"+i, SOFTWARE_DISK_BLOCK_SIZE-1000);
+    }
+    write_file(file1, buf, sizeof(buf));
 
-//     read_sd_block(buf, 70);
-//     for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++)
-//     {
-//         printf("%c", buf[i]);
-//     }
+    read_sd_block(buf, 70);
+    for(int i = 0; i < SOFTWARE_DISK_BLOCK_SIZE-1000; i++)
+    {
+        printf("%c", buf[i]);
+    }
 
-//     return 0;
-// }
+    return 0;
+}
