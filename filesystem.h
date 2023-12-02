@@ -109,6 +109,7 @@ typedef struct FileInternals{
     AccessMode mode;
     uint32_t cursor_position;
     Inode *inode;
+    char name[];
 }FileInternals;
 
 typedef struct FileInternals* File;
