@@ -839,7 +839,6 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
     //     write_data_blocks_to_disk(num_Blocks_To_Write_In_Indirect, indirect_Addresses_Array, numbytes);
 
     // }
-
     printf("Before");
     write_data_blocks(
     buf,
