@@ -107,7 +107,7 @@ typedef struct FileInternals{
     //char fname[MAX_FILENAME_SIZE];
     uint32_t size;
     AccessMode mode;
-    uint8_t *cursor_position;
+    uint32_t cursor_position;
     Inode *inode;
     char name[];
 }FileInternals;
