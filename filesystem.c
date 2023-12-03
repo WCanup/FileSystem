@@ -164,8 +164,7 @@ static unsigned long write_inode(Inode *inode, uint16_t addresses[], int num_blo
     num_Of_Indirect_Addresses_In_Inode = num_Addresses_Already_In_Inode - 13;if(num_Of_Indirect_Addresses_In_Inode + num_New_Addresses > 2048){fserror = FS_EXCEEDS_MAX_FILE_SIZE;  return 0;}
 
 
-    printf("Number of New Addresses : %d\nNumber of Addresses Already In : %d\n Number of Indirect Addresses Already In : %d\nNumber to Add in Direct : %d\nNumber to Add in Indirect : %d\n",
-    num_New_Addresses,num_Addresses_Already_In_Inode,num_Of_Indirect_Addresses_In_Inode,num_Addresses_To_Add_In_Direct,num_Addresses_To_Add_In_Indirect);
+    
     
 
     // if(num_Addresses_Already_In_Inode == 1 && num_New_Addresses <= 12)
@@ -178,18 +177,24 @@ static unsigned long write_inode(Inode *inode, uint16_t addresses[], int num_blo
     //     return 1;
     
     // }else{ 
-
+        
         if(num_Addresses_To_Add_In_Direct > num_blocks){
             num_Addresses_To_Add_In_Direct = num_blocks;
         }
 
-       
+       printf("Number of New Addresses : %d\nNumber of Addresses Already In : %d\n Number of Indirect Addresses Already In : %d\nNumber to Add in Direct : %d\nNumber to Add in Indirect : %d\n",
+    num_New_Addresses,num_Addresses_Already_In_Inode,num_Of_Indirect_Addresses_In_Inode,num_Addresses_To_Add_In_Direct,num_Addresses_To_Add_In_Indirect);
         
         if(num_Addresses_To_Add_In_Direct > 0){
 
             printf("\nCASE 2\n");
             //get sam to look over this pretty please
-            memcpy(inode->direct_addresses+(num_Addresses_Already_In_Inode*2)+1, addresses, (num_Addresses_To_Add_In_Direct*2));
+            //memcpy(inode->direct_addresses+(num_Addresses_Already_In_Inode*2), addresses, (num_Addresses_To_Add_In_Direct*2));
+
+            for(int i = 0; i < num_Addresses_To_Add_In_Direct; i++){
+                inode->direct_addresses[i+num_Addresses_Already_In_Inode] = addresses[i];
+            }
+
             uint32_t number = num_Addresses_To_Add_In_Direct;
             inode->size = inode->size + number;
             
@@ -250,8 +255,8 @@ static unsigned long write_inode(Inode *inode, uint16_t addresses[], int num_blo
             }
             
             
-        }
-    //}
+        //}
+    }
     return 2;
 }
 
@@ -272,18 +277,22 @@ static unsigned long write_data_blocks(char buf[], uint16_t indicies[], int num_
     int current_bytes = numbytes;
     //how many we have written
     int byte_count = startingPoint;
-
+    printf("\n\nBEFORE LOOP\n\n");
     for(int i = 0; i < num_blocks; i++)
-    {
-        
+    {   
+
+        int startingP = startingPoint + (i * SOFTWARE_DISK_BLOCK_SIZE); 
+        printf("Value of i : %d\nStarting Point : %d\nCurrent Block Index That Is Being Wrote : %u\n",i,startingP,indicies[i]);
         char *buf_start = buf + startingPoint + (i * SOFTWARE_DISK_BLOCK_SIZE);
 
         if(current_bytes >= SOFTWARE_DISK_BLOCK_SIZE){
+            printf("\n    THIS CASE\n");
         memcpy(data_blocks[indicies[i]].block, buf_start, SOFTWARE_DISK_BLOCK_SIZE);
         byte_count += SOFTWARE_DISK_BLOCK_SIZE;
         }
         else if(current_bytes < SOFTWARE_DISK_BLOCK_SIZE)
         {
+            printf("\n    THAT CASE\n");
             memcpy(data_blocks[indicies[i]].block, buf_start, current_bytes);
             byte_count+= current_bytes;
         }
@@ -661,6 +670,7 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
     int how_many_blocks_to_allocate;
     int how_Many_More_Blocks;
     int how_many_blocks_left;
+    Inode* inode = file->inode;
 
     if(file->inode->size == 0){
         how_many_blocks_left = 0;
@@ -697,28 +707,32 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
     }else{
         how_Many_More_Blocks = 0;
     }
-    
+     how_many_blocks_to_allocate = how_Many_More_Blocks - how_many_blocks_left;
+        printf("\nALLOCATING %d BLOCKS TO FILE\n",how_many_blocks_to_allocate);
+        uint16_t indicies[how_many_blocks_to_allocate];
     //WORKING
     //if we need more blocks get them
     if(how_many_blocks_left < how_Many_More_Blocks){
-        
-        how_many_blocks_to_allocate = how_Many_More_Blocks - how_many_blocks_left;
-        printf("\nALLOCATING %d BLOCKS TO FILE\n",how_many_blocks_to_allocate);
-        uint16_t indicies[how_many_blocks_to_allocate];
         DataBlock *blocks = fetch_data_blocks(how_many_blocks_to_allocate, indicies);
-        for(int i = 0; i < how_many_blocks_to_allocate; i ++)
-        {
-            printf("\n\nINDICIES AT %d : %u\n\n", i, indicies[i]);
-        }
-        unsigned long enoughSpace = write_inode(file->inode, indicies, how_many_blocks_to_allocate);
+        unsigned long enoughSpace = write_inode(inode, indicies, how_many_blocks_to_allocate);
+        
+        // for(int i = 0; i < 2; i ++)
+        // {
+        //     printf("\n\nIndicies AT %d : %u\n\n", i, indicies[i]);
+        // }
+        
+        // for(int i = 0; i < inode->size; i ++)
+        // {
+        //     printf("\n\nINODEADDRESS AT %d : %u\n\n", i, file->inode->direct_addresses[i]);
+        // }
     }
-    
+    printf("\n\nNEW INODE SIZE : %d\n\n",file->inode->size);
     
     DataBlock current_Block;
     uint16_t addressOfCurrentBlock;
 //These statements pull the address
     if(Current_Block_Index > 13){
-       //NOT FINISHED
+       
         uint16_t current_Address_In_Indirect;
         int index_of_Current = Current_Block_Index - 13;
         current_Block = data_blocks[file->inode->indirect];
@@ -738,9 +752,9 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
         // write_data_blocks(buf,);
         ret += amount_To_Add_In_Current_Block;
         write_sd_block(data_blocks[file->inode->direct_addresses[Current_Block_Index]].block, addressOfCurrentBlock);
-        printf("A\n");
+        
         Current_Block_Index+=1;
-        how_many_blocks_to_allocate -=1;
+        // how_many_blocks_to_allocate -=1;
     }else{
    
         printf("NUMBYTES : %lu\n",numbytes);
@@ -759,10 +773,12 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
     int num_Blocks_To_Write_In_Indirect;
 
     if(how_many_blocks_to_allocate < 13 - Current_Block_Index)
-    {
+    {   
+        printf("A\n");
         num_Blocks_To_Write_In_Direct = how_many_blocks_to_allocate;
         num_Blocks_To_Write_In_Indirect = 0;
     }else{
+        printf("B\n");
         num_Blocks_To_Write_In_Direct = Current_Block_Index;
         num_Blocks_To_Write_In_Indirect = how_many_blocks_to_allocate - num_Blocks_To_Write_In_Direct;
     }
@@ -772,59 +788,67 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes){
     // num_Blocks_To_Write_In_Direct = 13 - Current_Block_Index + 1; if( num_Blocks_To_Write_In_Direct < 0){num_Blocks_To_Write_In_Direct = 0;}
     // //if inode does not need indirect block then set numToAdd to be 0
     // num_Blocks_To_Write_In_Indirect = how_Many_More_Blocks - num_Blocks_To_Write_In_Direct; if(num_Blocks_To_Write_In_Indirect < 0){num_Blocks_To_Write_In_Indirect = 0;}
-
+    
+    // uint16_t direct_Addresses_Array[SOFTWARE_DISK_BLOCK_SIZE];
+    // uint16_t indirect_Addresses_Array[SOFTWARE_DISK_BLOCK_SIZE];
+    // int startAtBeginning = 0;
+    // int indirectAddressIndex = Current_Block_Index - 13;
+    // printf("\n\nNUMTOWRITETODIRECT = %d \n\n", num_Blocks_To_Write_In_Direct);
+    // printf("CURRENTBLOCKINDEX = %d\n\n", Current_Block_Index);
+    // if(num_Blocks_To_Write_In_Direct > 0){
+    //     startAtBeginning = 1;
+    // }
     
 
-
-
-    
-    uint16_t direct_Addresses_Array[num_Blocks_To_Write_In_Direct+1];
-    uint16_t indirect_Addresses_Array[num_Blocks_To_Write_In_Indirect+1];
-    int startAtBeginning = 0;
-    int indirectAddressIndex = Current_Block_Index - 13;
-    printf("\n\nNUMTOWRITETODIRECT = %d \n\n", num_Blocks_To_Write_In_Direct);
-    printf("CURRENTBLOCKINDEX = %d\n\n", Current_Block_Index);
-    if(num_Blocks_To_Write_In_Direct > 0){
-        startAtBeginning = 1;
-    }
-    for (int i = 0; i < 2; i ++)
-    {
-        printf("DIRECTADDRESS IN INODE : %u\n\n", file->inode->direct_addresses[i]);
-    }
-
-    
-    for(int i = 0; i < num_Blocks_To_Write_In_Direct;i++){
-            memcpy(direct_Addresses_Array[i], file->inode->direct_addresses[Current_Block_Index - 1], sizeof(uint16_t));//changing
-            printf("LOOPNUM : %d", i);
-    }
-    for(int i = 0; i < num_Blocks_To_Write_In_Indirect;i++){
-        if(startAtBeginning == 1){
-            memcpy(indirect_Addresses_Array[i], data_blocks[file->inode->indirect].block + (i*2), sizeof(uint16_t));
-        }else{
-            memcpy(indirect_Addresses_Array[i], data_blocks[file->inode->indirect].block + (i*2) + (indirectAddressIndex*2), sizeof(uint16_t));
-        }
-    }
+    // printf("FOR LOOPS START\n");
+    // for(int i = 0; i < num_Blocks_To_Write_In_Direct;i++){
+    //         printf("              A\n");
+    //         printf("\nADDRESS AT INODE TO ADD : %u\n", file->inode->direct_addresses[Current_Block_Index + i]);
+    //         direct_Addresses_Array[i] = file->inode->direct_addresses[Current_Block_Index + i];
+    //         printf("\nADDRESS ADDED IN D-A-ARRAY : %u",direct_Addresses_Array[i]);
+    //         //memcpy(direct_Addresses_Array[i], file->inode->direct_addresses[Current_Block_Index + i], sizeof(uint16_t));//changing
+    //         printf("\nLOOPNUM : %d\n", i);
+    // }
+    // for(int i = 0; i < num_Blocks_To_Write_In_Indirect;i++){
+    //     if(startAtBeginning == 1){
+    //         printf("              B\n");
+    //         memcpy(indirect_Addresses_Array[i], data_blocks[file->inode->indirect].block + (i*2), sizeof(uint16_t));
+    //     }else{
+    //         printf("              C\n");
+    //         memcpy(indirect_Addresses_Array[i], data_blocks[file->inode->indirect].block + (i*2) + (indirectAddressIndex*2), sizeof(uint16_t));
+    //     }
+    // }
+    //printf("LOOPS END\n");
+    // for (int i = 0; i < 2; i ++)
+    // {
+    //     printf("\n\nDIRECTADDRESS IN INODE : %u\n\n", file->inode->direct_addresses[i]);
+    // }
 
     int bytesLeft = numbytes - amount_To_Add_In_Current_Block;
     
 
-    if(num_Blocks_To_Write_In_Direct > 0){
+    // if(num_Blocks_To_Write_In_Direct > 0){
 
-        ret += write_data_blocks(buf, direct_Addresses_Array, num_Blocks_To_Write_In_Direct, num_Blocks_To_Write_In_Direct*SOFTWARE_DISK_BLOCK_SIZE, numbytes - ret);
-        write_data_blocks_to_disk(num_Blocks_To_Write_In_Direct, direct_Addresses_Array, numbytes);
+    //     ret += write_data_blocks(buf, direct_Addresses_Array, num_Blocks_To_Write_In_Direct, num_Blocks_To_Write_In_Direct*SOFTWARE_DISK_BLOCK_SIZE, numbytes - ret);
+    //     write_data_blocks_to_disk(num_Blocks_To_Write_In_Direct, direct_Addresses_Array, numbytes);
 
-    }
-    if(num_Blocks_To_Write_In_Indirect > 0){
+    // }
+    // if(num_Blocks_To_Write_In_Indirect > 0){
 
-        ret += write_data_blocks(buf, indirect_Addresses_Array, num_Blocks_To_Write_In_Indirect, num_Blocks_To_Write_In_Indirect * SOFTWARE_DISK_BLOCK_SIZE, numbytes - ret);
-        write_data_blocks_to_disk(num_Blocks_To_Write_In_Indirect, indirect_Addresses_Array, numbytes);
+    //     ret += write_data_blocks(buf, indirect_Addresses_Array, num_Blocks_To_Write_In_Indirect, num_Blocks_To_Write_In_Indirect * SOFTWARE_DISK_BLOCK_SIZE, numbytes - ret);
+    //     write_data_blocks_to_disk(num_Blocks_To_Write_In_Indirect, indirect_Addresses_Array, numbytes);
 
-    }
+    // }
 
-
-
+    printf("Before");
+    write_data_blocks(
+    buf,
+    indicies,
+    num_Blocks_To_Write_In_Direct+num_Blocks_To_Write_In_Indirect,
+    numbytes,
+    amount_To_Add_In_Current_Block);
     
-    
+    printf("HIT");
    
     
     
