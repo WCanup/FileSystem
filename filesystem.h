@@ -86,8 +86,8 @@ typedef struct Inode_Block{
 typedef struct Dir_Entry{
 
     char name[MAX_FILENAME_SIZE];  //507 bytes
-    uint16_t id;        //2 bytes
-    uint8_t mode;       //1 byte
+    //uint16_t id;        //2 bytes
+    FileMode mode;       //1 byte
     //uint16_t NT;      //2 bytes
                         //507+2+1+2 = 512
 }Dir_Entry;
@@ -109,7 +109,7 @@ typedef struct FileInternals{
     AccessMode mode;
     uint32_t cursor_position;
     Inode *inode;
-    char name[];
+    //char name[];
 }FileInternals;
 
 typedef struct FileInternals* File;

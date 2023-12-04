@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
     printf("ret from write_file(f, \"hello\", strlen(\"hello\") = %d\n",
 	   ret);
     fs_print_error();
+
     
     // should succeed
     printf("Seeking to beginning of file.\n");
